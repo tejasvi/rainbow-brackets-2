@@ -3,7 +3,7 @@
 	"publisher": "tejasvi",
 	"displayName": "Rainbow Brackets 2",
 	"description": "Distinct colors for matching brackets.",
-	"version": "0.0.1",
+	"version": "1.0.0",
 	"engines": {
 		"vscode": "^1.56.0"
 	},
@@ -26,7 +26,7 @@
 		"type": "git",
 		"url": "https://github.com/tejasvi/rainbow-brackets-2"
 	},
-	"icon": "./assets/logo.png",
+	"icon": "assets/logo.png",
 	"bugs": {
 		"url": "https://github.com/tejasvi/rainbow-brackets-2/issues"
 	},
