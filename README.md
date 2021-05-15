@@ -1,5 +1,6 @@
 # Rainbow Brackets 2
 
+[![VS Marketplace badge](https://vsmarketplacebadge.apphb.com/version-short/tejasvi.rainbow-brackets-2.svg)](https://marketplace.visualstudio.com/items?itemName=tejasvi.rainbow-brackets-2&ssr=false#review-details)
 Multi-color highlight of matching brackets.
 
 This fork is the continuation of original [Rainbow Brackets](https://github.com/gastrodia/rainbow-brackets).

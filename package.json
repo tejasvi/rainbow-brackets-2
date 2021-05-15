@@ -35,41 +35,52 @@
 	],
 	"main": "./extension.js",
 	"contributes": {
-		"configuration":[
+		"configuration": [
 			{
 				"title": "Rainbow Brackets 2",
 				"properties": {
-					"rainbowBrackets.roundBracketsColor":{
+					"rainbowBrackets.roundBracketsColor": {
 						"description": "Array of four colors: E.g. [\"#e6b422\", \"#c70067\", \"#00a960\", \"#fc7482\"]",
-						"type":"array",
-						"default": ["#e6b422", "#c70067", "#00a960", "#fc7482"],
+						"type": "array",
+						"default": [
+							"#e6b422",
+							"#c70067",
+							"#00a960",
+							"#fc7482"
+						],
 						"maxItems": 4,
 						"minItems": 4
 					},
-					"rainbowBrackets.squareBracketsColor":{
+					"rainbowBrackets.squareBracketsColor": {
 						"description": "Array of three colors: E.g. [\"#e6b422\", \"#00a960\", \"#fc7482\"]",
-						"type":"array",
-						"default": ["#33ccff", "#8080ff", "#0073a8"],
+						"type": "array",
+						"default": [
+							"#33ccff",
+							"#8080ff",
+							"#0073a8"
+						],
 						"maxItems": 3,
 						"minItems": 3
 					},
-					"rainbowBrackets.squigglyBracketsColor":{
+					"rainbowBrackets.squigglyBracketsColor": {
 						"description": "Array of three colors: E.g. [\"#c70067\", \"#00a960\", \"#fc7482\"]",
-						"type":"array",
+						"type": "array",
 						"maxItems": 3,
 						"minItems": 3
 					},
-					"rainbowBrackets.isolatedRightBracketsColor":{
+					"rainbowBrackets.isolatedRightBracketsColor": {
 						"description": "Color string: E.g. #e2041b",
-						"type":"string",
+						"type": "string",
 						"default": "#e2041b",
 						"maxLength": 7,
 						"minLength": 7
 					},
-					"rainbowBrackets.excludedLanguageIds":{
+					"rainbowBrackets.excludedLanguageIds": {
 						"markdownDescription": "List of Language Identifiers](https://code.visualstudio.com/docs/languages/identifiers#_known-language-identifiers) to exclude from highlighting. E.g. `markdown`",
 						"type": "array",
-						"default": ["markdown"]
+						"default": [
+							"markdown"
+						]
 					}
 				}
 			}
@@ -90,5 +101,10 @@
 		"mocha": "^8.2.1",
 		"typescript": "^4.1.3",
 		"vscode-test": "^1.5.0"
+	},
+	"__metadata": {
+		"id": "69a5f53e-ee02-47c6-94af-897d784dcd69",
+		"publisherDisplayName": "Tejasvi S. Tomar",
+		"publisherId": "48cdae1f-c60f-474f-95a2-86dd106fcb49"
 	}
 }
