@@ -65,6 +65,11 @@
 					"rainbowBrackets.squigglyBracketsColor": {
 						"description": "Array of three colors: E.g. [\"#c70067\", \"#00a960\", \"#fc7482\"]",
 						"type": "array",
+						"default": [
+							"#484c61",
+							"#d1a075",
+							"#9c6628"
+						],
 						"maxItems": 3,
 						"minItems": 3
 					},
