@@ -52,7 +52,7 @@ function activate(context) {
 		}
 	}
 	vscode.window.onDidChangeActiveTextEditor(function (editor) {
-		if (editor && !excludedLanguageIdsSet.has(activeEditor.document.languageId)) {
+		if (editor && !excludedLanguageIdsSet.has(editor.document.languageId)) {
 			activeEditor = editor;
 			rainbowBrackets();
 		} else {
