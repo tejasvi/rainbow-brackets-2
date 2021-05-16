@@ -3,7 +3,7 @@
 	"publisher": "tejasvi",
 	"displayName": "Rainbow Brackets 2",
 	"description": "Distinct colors for matching brackets.",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"engines": {
 		"vscode": "^1.56.0"
 	},
