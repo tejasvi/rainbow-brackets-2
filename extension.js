@@ -17,7 +17,6 @@ function activate(context) {
 	const roundBracketsColor = config.get("roundBracketsColor", ["#e6b422", "#c70067", "#00a960", "#fc7482"]);
 	const squareBracketsColor = config.get("squareBracketsColor", ["#33ccff", "#8080ff", "#0073a8"]);
 	const squigglyBracketsColor = config.get("squigglyBracketsColor", [vscode.window.activeColorTheme.kind == vscode.ColorThemeKind.Dark ? "#d4d4aa" : "#484c61", "#d1a075", "#9c6628"]);
-	const isolatedRightBracketsColor = config.get("isolatedRightBracketsColor", "#e2041b");
 
 	const roundBracketsDecorationTypes = [];
 	const squareBracketsDecorationTypes = [];
@@ -37,9 +36,6 @@ function activate(context) {
 			color: squigglyBracketsColor[index]
 		}));
 	}
-	const isolatedRightBracketsDecorationTypes = vscode.window.createTextEditorDecorationType({
-		color: isolatedRightBracketsColor
-	});
 
 	const excludedLanguageIdsSet = new Set(config.get("excludedLanguageIds", []));
 
@@ -167,7 +163,6 @@ function activate(context) {
 		for (let index in squigglyBracketsDecorationTypes) {
 			activeEditor.setDecorations(squigglyBracketsDecorationTypes[index], squigglyBracketsDecorationTypeMap[index]);
 		}
-		activeEditor.setDecorations(isolatedRightBracketsDecorationTypes, rightBracketsDecorationTypes);
 	}
 }
 exports.activate = activate;
