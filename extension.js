@@ -69,7 +69,7 @@ function activate(context) {
 			return;
 		}
 		const text = activeEditor.document.getText();
-		const regEx = /[\(\)\[\]\{\}]/g;
+		const regEx = /[\(\)\[\]\{\}]|\/\*|\*\//g;
 		let match;
 		let roundBracketsColorCount = 0;
 		let squareBracketsColorCount = 0;
