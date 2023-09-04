@@ -69,7 +69,7 @@ function activate(context) {
 			return;
 		}
 		const text = activeEditor.document.getText();
-		const regEx = /[\(\)\[\]\{\}]/g;
+		const regEx = /[\(\)\[\]\{\}]|\/\*|\*\//g;
 		let match;
 		let roundBracketsColorCount = 0;
 		let squareBracketsColorCount = 0;
@@ -96,9 +96,21 @@ function activate(context) {
 		let roundCalculate;
 		let squareCalculate;
 		let squigglyCalculate;
+		let itsComment = false; 
 		while (match = regEx.exec(text)) {
+			switch(match[0]){
+				case '/*': 
+					itsComment = true; 
+					continue;
+				case '*/':
+					itsComment = false;
+					continue;
+				default:
+					if(itsComment)	continue;
+			} 
 			const startPos = activeEditor.document.positionAt(match.index);
 			const endPos = activeEditor.document.positionAt(match.index + 1);
+			if(activeEditor.document.lineAt(startPos).text.slice(0,startPos.character).indexOf("//", 0) != -1) continue;
 			const decoration = new vscode.Range(startPos, endPos);
 			switch (match[0]) {
 				case '(':
