@@ -1,0 +1,7 @@
+﻿{
+	"scopeName": "annotation.injection.mini",
+	"injectionSelector": "L:comment.line.mini",
+	"patterns": [
+		{ "name": "meta.embedded.annotation.mini", "match": "@\\w+\\([^)]*\\)" }
+	]
+}

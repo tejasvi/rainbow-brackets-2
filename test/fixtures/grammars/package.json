@@ -1,0 +1,32 @@
+{
+	"name": "mini-language",
+	"contributes": {
+		"grammars": [
+			{
+				"language": "mini",
+				"scopeName": "source.mini",
+				"path": "./mini.tmLanguage.json",
+				"tokenTypes": {
+					"meta.template.expression": "other"
+				},
+				"unbalancedBracketScopes": [
+					"keyword.other.smiley"
+				]
+			},
+			{
+				"scopeName": "annotation.injection.mini",
+				"path": "./annotation.tmLanguage.json",
+				"injectTo": [
+					"source.mini"
+				]
+			},
+			{
+				"scopeName": "missing.injection.mini",
+				"path": "./missing.tmLanguage.json",
+				"injectTo": [
+					"source.mini"
+				]
+			}
+		]
+	}
+}

@@ -1,0 +1,41 @@
+{
+	"scopeName": "source.mini",
+	"patterns": [
+		{ "include": "#code" }
+	],
+	"repository": {
+		"code": {
+			"patterns": [
+				{ "name": "comment.line.mini", "begin": "//", "end": "$" },
+				{ "name": "comment.block.mini", "begin": "/\\*", "end": "\\*/" },
+				{
+					"name": "string.quoted.double.mini",
+					"begin": "\"",
+					"end": "\"",
+					"patterns": [{ "name": "constant.character.escape.mini", "match": "\\\\." }]
+				},
+				{
+					"name": "string.template.mini",
+					"begin": "`",
+					"end": "`",
+					"patterns": [
+						{
+							"name": "meta.template.expression.mini",
+							"begin": "\\$\\{",
+							"end": "\\}",
+							"patterns": [{ "include": "#braces" }, { "include": "#code" }]
+						}
+					]
+				},
+				{ "name": "string.regexp.mini", "match": "~[^~]*~" },
+				{ "name": "keyword.other.smiley.mini", "match": ":\\)" },
+				{ "begin": "<<", "end": ">>", "patterns": [{ "match": "\\p{NotAProperty}" }] }
+			]
+		},
+		"braces": {
+			"begin": "\\{",
+			"end": "\\}",
+			"patterns": [{ "include": "#braces" }, { "include": "#code" }]
+		}
+	}
+}
