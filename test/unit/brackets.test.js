@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { BRACKETS, ISOLATED, scanBrackets, colorBrackets } = require('../../src/brackets');
+const { BRACKETS, ISOLATED, ZERO_DEPTHS, scanBrackets, colorBrackets, depthsAfter } = require('../../src/brackets');
 
 /** Colors `text` and writes each bracket followed by its color, or by `!` when it is isolated. */
 function colors(text, colorCounts = [4, 3, 3]) {
@@ -30,6 +30,13 @@ suite('colorBrackets', () => {
 
 	test('closing brackets with no opening bracket are isolated and leave the depth alone', () => {
 		assert.deepStrictEqual(colors(') ( ] ) )'), [')! (0 ]! )0 )!']);
+	});
+
+	test('lines that leave the depths alone share them', () => {
+		const line = text => scanBrackets(text, 0, text.length, []);
+		assert.strictEqual(depthsAfter(line('f(a[1]) { }'), ZERO_DEPTHS), ZERO_DEPTHS);
+		assert.strictEqual(depthsAfter(line(')]}'), ZERO_DEPTHS), ZERO_DEPTHS);
+		assert.deepStrictEqual(depthsAfter(line('{ ( ) [ [ ] )'), ZERO_DEPTHS), [0, 1, 1]);
 	});
 
 	test('positions are kept', () => {

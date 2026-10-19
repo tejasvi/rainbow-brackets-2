@@ -15,7 +15,12 @@ function scanned(tokenizer, text) {
 	const document = documentOf(text);
 	const model = new DocumentModel(tokenizer, document.lineCount);
 	model.update(document, Infinity);
-	return model.brackets;
+	return model;
+}
+
+/** The brackets and depths of the first `count` lines, to compare models. */
+function lines(model, count = model.lineCount) {
+	return model.brackets.slice(0, count).map((brackets, i) => ({ brackets, depths: [...model.depths[i]] }));
 }
 
 function offsetOf(text, line, character) {
@@ -91,19 +96,31 @@ function fuzz(tokenizer, seed) {
 			model.update(document, 0);
 		}
 		if (step % 10 === 9) {
-			model.update(document, Infinity);
-			assert.deepStrictEqual(model.brackets, scanned(tokenizer, text), `seed ${seed}, step ${step}, text ${JSON.stringify(text)}`);
+			assert.strictEqual(model.update(document, Infinity), true);
+			assert.deepStrictEqual(lines(model), lines(scanned(tokenizer, text)), `seed ${seed}, step ${step}, text ${JSON.stringify(text)}`);
+		} else if (model.readyLines < model.lineCount) {
+			// The lines reported ready are right already.
+			const ready = model.readyLines;
+			assert.deepStrictEqual(lines(model, ready), lines(scanned(tokenizer, text), ready), `seed ${seed}, step ${step}`);
 		}
 	}
 }
 
 suite('DocumentModel', () => {
 	let store, grammarTokenizer;
+	const errors = [];
+	let consoleError;
 	suiteSetup(async () => {
+		// The fixtures inject a grammar whose file is missing, which gets reported.
+		consoleError = console.error;
+		console.error = (...args) => errors.push(args.join(' '));
 		store = new GrammarStore([{ extensionPath: fixtures, packageJSON: require(path.join(fixtures, 'package.json')) }]);
 		grammarTokenizer = await store.getTokenizer('mini', 20000);
 	});
-	suiteTeardown(() => store.dispose());
+	suiteTeardown(() => {
+		console.error = consoleError;
+		store.dispose();
+	});
 
 	test('incremental scans match full scans, without a grammar', () => {
 		for (let seed = 1; seed <= 30; seed++) {
@@ -136,6 +153,35 @@ suite('DocumentModel', () => {
 		assert.deepStrictEqual(scannedLines, ['/*"b("', '/* c']);
 	});
 
+	test('depths are counted again only until a line ends at the same depths as before', () => {
+		const text = 'a(\nb\n)\nc\n(d)';
+		const model = scanned(plainTokenizer, text);
+		const depths = model.depths.slice();
+		// A balanced edit leaves the depths of the lines after it alone.
+		model.applyChanges([{ range: { start: { line: 1, character: 1 }, end: { line: 1, character: 1 } }, text: '[x]' }]);
+		model.update(documentOf('a(\nb[x]\n)\nc\n(d)'), Infinity);
+		assert.deepStrictEqual(model.depths, depths);
+		assert.ok(model.depths.every((d, i) => d === depths[i]));
+		// An unbalanced one changes them up to the end.
+		model.applyChanges([{ range: { start: { line: 1, character: 0 }, end: { line: 1, character: 0 } }, text: '{' }]);
+		model.update(documentOf('a(\n{b[x]\n)\nc\n(d)'), Infinity);
+		assert.deepStrictEqual(model.depths.map(d => [...d]), [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1], [0, 0, 1]]);
+	});
+
+	test('counting stops at the deadline and goes on later', () => {
+		const text = 'a\n' + '(\n'.repeat(10000);
+		const model = scanned(plainTokenizer, text);
+		// Every line after the edit gets a new square bracket depth.
+		model.applyChanges([{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, text: '[' }]);
+		const document = documentOf('[' + text);
+		const ready = [];
+		while (!model.update(document, 0)) {
+			ready.push(model.readyLines);
+		}
+		assert.ok(ready.length >= 2 && ready.every((r, i) => i === 0 || r > ready[i - 1]), ready.join());
+		assert.deepStrictEqual(lines(model), lines(scanned(plainTokenizer, '[' + text)));
+	});
+
 	test('large pastes', () => {
 		const pasted = '(\n'.repeat(30000);
 		const model = new DocumentModel(plainTokenizer, 2);
@@ -144,6 +190,6 @@ suite('DocumentModel', () => {
 		const text = 'a\n' + pasted + ')';
 		model.update(documentOf(text), Infinity);
 		assert.strictEqual(model.lineCount, 30002);
-		assert.deepStrictEqual(model.brackets, scanned(plainTokenizer, text));
+		assert.deepStrictEqual(lines(model), lines(scanned(plainTokenizer, text)));
 	});
 });

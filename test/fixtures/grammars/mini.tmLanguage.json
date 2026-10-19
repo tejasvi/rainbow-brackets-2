@@ -28,7 +28,8 @@
 					]
 				},
 				{ "name": "string.regexp.mini", "match": "~[^~]*~" },
-				{ "name": "keyword.other.smiley.mini", "match": ":\\)" }
+				{ "name": "keyword.other.smiley.mini", "match": ":\\)" },
+				{ "begin": "<<", "end": ">>", "patterns": [{ "match": "\\p{NotAProperty}" }] }
 			]
 		},
 		"braces": {

@@ -114,7 +114,7 @@
 		"package": "vsce package"
 	},
 	"dependencies": {
-		"vscode-oniguruma": "^2.0.1",
+		"vscode-oniguruma": "~1.7.0",
 		"vscode-textmate": "^9.3.2"
 	},
 	"devDependencies": {

@@ -17,7 +17,8 @@ let onigLib;
 function loadTextmate() {
 	if (!textmate) {
 		textmate = require('vscode-textmate');
-		// vscode-oniguruma can be loaded only once per process.
+		// The same vscode-oniguruma as VS Code's, which never matches a pattern it can't compile
+		// where newer versions throw. It can be loaded only once per process.
 		const oniguruma = require('vscode-oniguruma');
 		const wasm = fs.readFileSync(path.join(path.dirname(require.resolve('vscode-oniguruma')), 'onig.wasm'));
 		onigLib = oniguruma.loadWASM(wasm.buffer.slice(wasm.byteOffset, wasm.byteOffset + wasm.byteLength)).then(() => ({
@@ -110,7 +111,14 @@ class GrammarStore {
 					if (!grammar) {
 						return null;
 					}
-					return parseRawGrammar(await fs.promises.readFile(grammar.path, 'utf8'), grammar.path);
+					// Like VS Code, go on without a grammar that can't be loaded, such as an injection.
+					try {
+						const content = await fs.promises.readFile(grammar.path, 'utf8');
+						return parseRawGrammar(content.replace(/^\uFEFF/, ''), grammar.path);
+					} catch (error) {
+						console.error(`Rainbow Brackets 2: cannot load the grammar ${grammar.path}`, error);
+						return null;
+					}
 				},
 				getInjections: scopeName => {
 					// Grammars injected into `source.js` apply to `source.js.jsx` too.
@@ -138,14 +146,25 @@ function stringArray(value, defaultValue) {
 }
 
 function grammarTokenizer(grammar, initialState, maxLineLength) {
+	let failed = false;
 	return {
 		initialState,
 		tokenizeLine(text, state) {
-			// VS Code doesn't tokenize long lines, and keeps the state across them.
+			// Like VS Code, find no brackets in lines that are too long to tokenize or that the grammar
+			// fails on, and keep the state across them.
 			if (text.length >= maxLineLength) {
-				return { brackets: scanBrackets(text, 0, text.length, []), state };
+				return { brackets: NONE, state };
 			}
-			const result = grammar.tokenizeLine2(text, state, TIME_LIMIT);
+			let result;
+			try {
+				result = grammar.tokenizeLine2(text, state, TIME_LIMIT);
+			} catch (error) {
+				if (!failed) {
+					failed = true;
+					console.error('Rainbow Brackets 2: cannot tokenize a line', error);
+				}
+				return { brackets: NONE, state };
+			}
 			const tokens = result.tokens, brackets = [];
 			for (let i = 0; i < tokens.length; i += 2) {
 				const metadata = tokens[i + 1];
@@ -160,4 +179,4 @@ function grammarTokenizer(grammar, initialState, maxLineLength) {
 	};
 }
 
-module.exports = { GrammarStore };
+module.exports = { GrammarStore, grammarTokenizer };

@@ -16,7 +16,16 @@
 			{
 				"scopeName": "annotation.injection.mini",
 				"path": "./annotation.tmLanguage.json",
-				"injectTo": ["source.mini"]
+				"injectTo": [
+					"source.mini"
+				]
+			},
+			{
+				"scopeName": "missing.injection.mini",
+				"path": "./missing.tmLanguage.json",
+				"injectTo": [
+					"source.mini"
+				]
 			}
 		]
 	}

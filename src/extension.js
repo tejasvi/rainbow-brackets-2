@@ -3,7 +3,7 @@
  */
 'use strict';
 const vscode = require('vscode');
-const { BRACKETS, ISOLATED, colorBrackets } = require('./brackets');
+const { BRACKETS, ISOLATED, lineColors } = require('./brackets');
 const { DocumentModel, plainTokenizer } = require('./documentModel');
 const { GrammarStore } = require('./grammars');
 
@@ -23,15 +23,21 @@ class RainbowBrackets {
 		this.decorationTypes = [];
 		// Bumped when every document has to be scanned again.
 		this.generation = 0;
+		this.disposed = false;
 		this.grammars = new GrammarStore(vscode.extensions.all);
 		this.readConfiguration();
 		this.disposables = [
 			vscode.window.onDidChangeVisibleTextEditors(() => this.refreshAll()),
-			vscode.window.onDidChangeTextEditorVisibleRanges(event => this.decorate(event.textEditor)),
+			vscode.window.onDidChangeTextEditorVisibleRanges(({ textEditor }) => {
+				const state = this.documents.get(textEditor.document.uri.toString());
+				if (state && state.document === textEditor.document && state.model && state.generation === this.generation) {
+					this.decorate(state, textEditor);
+				}
+			}),
 			vscode.workspace.onDidChangeTextDocument(event => this.onDidChangeTextDocument(event)),
 			// A document whose language changes is closed and opened again.
 			vscode.workspace.onDidOpenTextDocument(document => this.refresh(document)),
-			vscode.workspace.onDidCloseTextDocument(document => this.documents.delete(document.uri.toString())),
+			vscode.workspace.onDidCloseTextDocument(document => this.forget(document.uri.toString())),
 			vscode.workspace.onDidChangeConfiguration(event => this.onDidChangeConfiguration(event)),
 			vscode.extensions.onDidChange(() => {
 				this.grammars.dispose();
@@ -76,25 +82,16 @@ class RainbowBrackets {
 		this.isolatedSlot = this.decorationTypes.length - 1;
 		const excluded = config.get('excludedLanguageIds');
 		this.excluded = new Set(Array.isArray(excluded) ? excluded : []);
-
-		const editorConfig = vscode.workspace.getConfiguration('editor');
-		const scanning = {
-			ignoreStringsAndComments: config.get('ignoreStringsAndComments') !== false,
-			maxLineLength: editorConfig.get('maxTokenizationLineLength', 20000),
-			largeFileOptimizations: editorConfig.get('largeFileOptimizations', true),
-		};
-		if (JSON.stringify(scanning) !== JSON.stringify(this.scanning)) {
-			this.scanning = scanning;
-			this.generation++;
-		}
+		this.ignoreStringsAndComments = config.get('ignoreStringsAndComments') !== false;
 	}
 
 	onDidChangeConfiguration(event) {
-		if (['rainbowBrackets', 'editor.maxTokenizationLineLength', 'editor.largeFileOptimizations'].some(section => event.affectsConfiguration(section))) {
+		const affects = section => event.affectsConfiguration(section);
+		if (['rainbowBrackets.ignoreStringsAndComments', 'editor.maxTokenizationLineLength', 'editor.largeFileOptimizations'].some(affects)) {
+			this.generation++;
+		}
+		if (['rainbowBrackets', 'editor.maxTokenizationLineLength', 'editor.largeFileOptimizations'].some(affects)) {
 			this.readConfiguration();
-			for (const state of this.documents.values()) {
-				state.colors = state.partial = null;
-			}
 			this.refreshAll();
 		}
 	}
@@ -107,7 +104,7 @@ class RainbowBrackets {
 		if (state.model) {
 			state.model.applyChanges(contentChanges);
 		}
-		state.colors = state.partial = null;
+		state.version++;
 		this.refresh(document, EDIT_DELAY);
 	}
 
@@ -129,22 +126,37 @@ class RainbowBrackets {
 	/** Brings the colors of a visible document up to date, after `delay` ms. */
 	refresh(document, delay = 0) {
 		const editors = this.editorsOf(document);
-		if (editors.length === 0) {
+		if (this.disposed || editors.length === 0) {
 			return;
 		}
 		const key = document.uri.toString();
 		if (this.isExcluded(document)) {
-			this.documents.delete(key);
+			this.forget(key);
 			editors.forEach(editor => this.clear(editor));
 			return;
 		}
 		let state = this.documents.get(key);
 		if (!state || state.document !== document) {
-			state = { document, model: null, generation: -1, colors: null, partial: null, timer: undefined, running: null, again: false };
+			// `version` counts the changes to the brackets that are not decorated yet.
+			state = { key, document, model: null, generation: -1, version: 0, timer: undefined, running: null, again: false };
 			this.documents.set(key, state);
 		}
 		clearTimeout(state.timer);
 		state.timer = setTimeout(() => this.run(state), delay);
+	}
+
+	/** Stops the work on a document. */
+	forget(key) {
+		const state = this.documents.get(key);
+		if (state) {
+			clearTimeout(state.timer);
+			this.documents.delete(key);
+		}
+	}
+
+	/** Whether the work on a document should go on. */
+	isCurrent(state) {
+		return !this.disposed && !state.document.isClosed && this.documents.get(state.key) === state;
 	}
 
 	run(state) {
@@ -158,7 +170,7 @@ class RainbowBrackets {
 					do {
 						state.again = false;
 						await this.update(state);
-					} while (state.again && !state.document.isClosed);
+					} while (state.again && this.isCurrent(state));
 				} catch (error) {
 					console.error('Rainbow Brackets 2:', error);
 				} finally {
@@ -171,98 +183,88 @@ class RainbowBrackets {
 
 	async update(state) {
 		const { document } = state;
-		if (document.isClosed) {
+		if (!this.isCurrent(state)) {
 			return;
 		}
 		if (!state.model || state.generation !== this.generation || state.model.lineCount !== document.lineCount) {
 			const generation = this.generation;
 			const tokenizer = await this.tokenizerFor(document);
+			if (!this.isCurrent(state)) {
+				return;
+			}
 			if (generation !== this.generation) {
 				state.again = true;
 				return;
 			}
 			state.model = new DocumentModel(tokenizer, document.lineCount);
 			state.generation = generation;
-			state.colors = state.partial = null;
+			state.version++;
 		}
+		// Lines that are scanned already are decorated while the rest is scanned. The colors of a
+		// line depend only on the lines above it, so they are final.
 		while (!state.model.update(document, Date.now() + SLICE)) {
-			this.decorateScanned(state);
+			this.decorateAll(state);
 			await new Promise(resolve => setImmediate(resolve));
-			if (document.isClosed || state.generation !== this.generation) {
+			if (!this.isCurrent(state)) {
+				return;
+			}
+			if (state.generation !== this.generation) {
 				state.again = true;
 				return;
 			}
 		}
-		if (!state.colors) {
-			state.colors = colorBrackets(state.model.brackets, this.colorCounts);
-			state.partial = null;
-		}
-		for (const editor of this.editorsOf(document)) {
-			this.decorate(editor);
-		}
-	}
-
-	/**
-	 * While a document is being scanned, decorates the editors whose visible lines are scanned
-	 * already. The colors of a line depend only on the lines above it, so they are final.
-	 */
-	decorateScanned(state) {
-		const scanned = state.model.firstDirty;
-		for (const editor of this.editorsOf(state.document)) {
-			const { last } = visibleLines(editor);
-			if (last >= scanned) {
-				continue;
-			}
-			if (!state.partial || last >= state.partial.length) {
-				state.partial = colorBrackets(state.model.brackets.slice(0, scanned), this.colorCounts);
-			}
-			this.decorate(editor, state.partial);
-		}
+		this.decorateAll(state);
 	}
 
 	async tokenizerFor(document) {
-		const { ignoreStringsAndComments, maxLineLength, largeFileOptimizations } = this.scanning;
-		if (!ignoreStringsAndComments) {
+		if (!this.ignoreStringsAndComments) {
 			return plainTokenizer;
 		}
+		const config = vscode.workspace.getConfiguration('editor', document);
 		// VS Code doesn't highlight large files either.
-		if (largeFileOptimizations && (document.lineCount > 300000 || document.offsetAt(document.lineAt(document.lineCount - 1).range.end) > 20 * 1024 * 1024)) {
+		if (config.get('largeFileOptimizations', true) && (document.lineCount > 300000 || document.offsetAt(document.lineAt(document.lineCount - 1).range.end) > 20 * 1024 * 1024)) {
 			return plainTokenizer;
 		}
-		return await this.grammars.getTokenizer(document.languageId, maxLineLength) || plainTokenizer;
+		return await this.grammars.getTokenizer(document.languageId, config.get('maxTokenizationLineLength', 20000)) || plainTokenizer;
+	}
+
+	decorateAll(state) {
+		for (const editor of this.editorsOf(state.document)) {
+			this.decorate(state, editor);
+		}
 	}
 
 	/**
-	 * Decorates the brackets around the visible lines, unless they are decorated already.
-	 * `colors` are the colors of the document's lines, or of the first lines while it is being scanned.
+	 * Decorates the brackets around the visible lines, as far as they are up to date. Does nothing
+	 * if they are decorated already, or if some visible line is not up to date: VS Code moves the
+	 * existing decorations along with edits until then.
 	 */
-	decorate(editor, colors) {
-		const state = this.documents.get(editor.document.uri.toString());
-		if (!state || state.document !== editor.document) {
+	decorate(state, editor) {
+		const { model } = state;
+		const ready = model.readyLines;
+		const { first, last } = visibleLines(editor, model.lineCount);
+		if (last >= ready) {
 			return;
 		}
-		colors = colors || state.colors;
-		if (!colors) {
-			return;
-		}
-		const lineCount = colors.length;
-		const { first, last } = visibleLines(editor);
 		const window = this.windows.get(editor);
-		if (window && window.colors === colors && window.start <= Math.max(0, first - MARGIN / 2) && Math.min(lineCount, last + 1 + MARGIN / 2) <= window.end) {
+		if (window && window.version === state.version && window.start <= Math.max(0, first - MARGIN / 2) && Math.min(ready, last + 1 + MARGIN / 2) <= window.end) {
 			return;
 		}
-		const start = Math.max(0, first - MARGIN), end = Math.min(lineCount, last + 1 + MARGIN);
+		const start = Math.max(0, first - MARGIN), end = Math.min(ready, last + 1 + MARGIN);
 		const ranges = this.decorationTypes.map(() => []);
 		for (let line = start; line < end; line++) {
-			const brackets = state.model.brackets[line], lineColors = colors[line];
-			for (let i = 0; i < brackets.length; i++) {
-				const code = brackets[i] % 8, column = (brackets[i] - code) / 8;
-				const slot = lineColors[i] === ISOLATED ? this.isolatedSlot : this.firstSlot[code >> 1] + lineColors[i];
-				ranges[slot].push(new vscode.Range(line, column, line, column + 1));
+			const brackets = model.brackets[line];
+			if (brackets.length === 0) {
+				continue;
 			}
+			lineColors(brackets, model.depths[line], this.colorCounts).forEach((color, i) => {
+				const code = brackets[i] % 8, column = (brackets[i] - code) / 8;
+				const slot = color === ISOLATED ? this.isolatedSlot : this.firstSlot[code >> 1] + color;
+				ranges[slot].push(new vscode.Range(line, column, line, column + 1));
+			});
 		}
 		this.decorationTypes.forEach((type, slot) => editor.setDecorations(type, ranges[slot]));
-		this.windows.set(editor, { start, end, colors });
+		this.windows.set(editor, { start, end, version: state.version });
 	}
 
 	clear(editor) {
@@ -285,33 +287,41 @@ class RainbowBrackets {
 		while (state.timer !== undefined || state.running) {
 			await (state.timer !== undefined ? this.run(state) : state.running);
 		}
-		if (!state.colors) {
+		if (!this.isCurrent(state) || !state.model || state.model.readyLines < state.model.lineCount) {
 			return [];
 		}
+		const { model } = state;
 		const result = [];
-		state.model.brackets.forEach((brackets, line) => brackets.forEach((bracket, i) => {
-			const code = bracket % 8, color = state.colors[line][i];
-			result.push({ line, character: (bracket - code) / 8, bracket: BRACKETS[code], color: color === ISOLATED ? 'isolated' : color });
+		model.brackets.forEach((brackets, line) => lineColors(brackets, model.depths[line], this.colorCounts).forEach((color, i) => {
+			const code = brackets[i] % 8;
+			result.push({ line, character: (brackets[i] - code) / 8, bracket: BRACKETS[code], color: color === ISOLATED ? 'isolated' : color });
 		}));
 		return result;
 	}
 
 	dispose() {
+		this.disposed = true;
 		for (const disposable of [...this.disposables, ...this.decorationTypes]) {
 			disposable.dispose();
 		}
-		for (const state of this.documents.values()) {
-			clearTimeout(state.timer);
+		for (const key of [...this.documents.keys()]) {
+			this.forget(key);
 		}
-		this.documents.clear();
 		this.grammars.dispose();
 	}
 }
 
-/** The first and last visible lines of an editor. */
-function visibleLines(editor) {
+/**
+ * The first and last visible lines of an editor. Right after lines are deleted, the visible
+ * ranges can still reach past the end of the document.
+ */
+function visibleLines(editor, lineCount) {
 	const visible = editor.visibleRanges;
-	return visible.length > 0 ? { first: visible[0].start.line, last: visible[visible.length - 1].end.line } : { first: 0, last: 0 };
+	if (visible.length === 0) {
+		return { first: 0, last: 0 };
+	}
+	const last = Math.min(visible[visible.length - 1].end.line, lineCount - 1);
+	return { first: Math.min(visible[0].start.line, last), last };
 }
 
 /** Whether a setting has a value of its own in any scope. */

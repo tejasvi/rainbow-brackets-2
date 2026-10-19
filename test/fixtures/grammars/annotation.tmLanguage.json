@@ -1,4 +1,4 @@
-{
+﻿{
 	"scopeName": "annotation.injection.mini",
 	"injectionSelector": "L:comment.line.mini",
 	"patterns": [
